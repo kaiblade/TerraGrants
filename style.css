@@ -1,0 +1,22 @@
+
+/* metric containers */
+div[data-testid="metric-container"] {
+    background-color: #053242;
+    padding: 3% 3% 3% 3%;
+    border-radius: 5px;
+}
+
+
+/* Hide hamburger menu and footer */
+
+/* div[data-testid="stToolbar"] {
+    display: none;
+} */
+  
+footer.css-2ykyy6.egzxvld0 {
+display: none;
+}
+
+footer.css-k9t1y1.egzxvld0 {
+    display: none;
+}

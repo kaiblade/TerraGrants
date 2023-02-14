@@ -22,6 +22,28 @@ asyncio.set_event_loop(loop)
 terra = LCDClient(chain_id="phoenix-1", url="https://phoenix-lcd.terra.dev")
 votes_tables_url ="https://api.flipsidecrypto.com/api/v2/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7/data/latest"
 
+def votes_stats(url1, url2):
+    df1=df_creator(url1)
+    df2=table_votes(votes_tables_url)
+    df3=df_creator(url2)
+    df_inner =pd.merge(df1, df2, on='Proposal ID', how='inner')
+    votes_dict=dict()
+    votes_dict['Total Approved Proposals (Voting Period)'] = df_inner.loc[df_inner['Proposal Status'] == 'Approved', 'Proposal ID'].count()
+    votes_dict['Total Rejected Proposals (Voting Period)'] = df_inner.loc[df_inner['Proposal Status'] == 'Rejected', 'Proposal ID'].count()
+    votes_dict['Total in-progress Proposals (Voting Period)'] = df_inner.loc[(df_inner['Proposal Status'] == 'Passing') | (df_inner['Proposal Status'] == 'Failing'), 'Proposal ID'].count()
+    votes_dict['Total Votes Casted'] = df_inner['Yes Votes'].sum() + df_inner['No Votes'].sum()\
+    + df_inner['Abstain Votes'].sum()+ df_inner['NoWithVeto Votes'].sum() 
+    votes_dict[f"# of 'Yes' Votes"] = df_inner['Yes Votes'].sum()
+    votes_dict[f"# of 'No' Votes"] = df_inner['No Votes'].sum()
+    votes_dict[f"# of 'Abstain' Votes"]=df_inner['Abstain Votes'].sum()
+    votes_dict[f"# of 'NoWithVeto' Votes"]=df_inner['NoWithVeto Votes'].sum()
+
+    list_cols=list(df3.columns)
+    for col in list_cols:
+        votes_dict[col]=df3[col].iat[0]
+
+    return votes_dict
+
 def deposits_stats(url1,url2):
     df1=df_creator(url2)
     df2=table_votes(votes_tables_url)
@@ -40,26 +62,91 @@ def deposits_stats(url1,url2):
         stats_dict[col]=df3[col].iat[0]
     
     return stats_dict
+def donuts(url,x,y,title,sql):
 
+    st.markdown("---")
+    st.text("")
+
+    st.markdown(f'[{title}]({sql})')
+
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        response_json = response.json()
+    else:
+        response = None
+
+    df=pd.DataFrame.from_records(response_json)
+    df[x]=df[x].apply(lambda col: f'{col[0:18]}...' if len(col) > 21 else col)
+
+  
+    fig = px.pie(df[x], values = df[y], hole = 0.55,
+        names = df[x],
+    )
+
+    fig.update_layout(
+        autosize=True,
+        width=550,
+        height=550,
+        showlegend=True, margin={"l":0,"r":5,"t":0,"b":0}
+    )
+
+    fig.update_traces(
+        hoverinfo='label+percent',
+        textinfo='percent', textfont_size=14)
+
+    st.plotly_chart(fig, theme=None, use_container_width=True)
+
+def bar_charts(url, x, y,title,sql,z=None):
+    
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        response_json = response.json()
+    else:
+        response = None
+
+    df=pd.DataFrame.from_records(response_json)
     
 
+    if 'Rewards' in title:
+        print(luna_info()[2])
+        df[y] = df[y]*float(luna_info()[2])
+        if 'Total' in title:
+            return df[y].sum()
     
-    # deposit_data =dict()
-    # try:
-    #     for id in id_list:
-    #         print(id)
-    #         deposit_amount=str(terra.gov.deposits(id)[0][0].amount)
-            
-    #         deposit_data[id]=int(deposit_amount.replace('uluna',''))/pow(10,6)
-            
-    #     server_state.deposit_data = deposit_data
-    # except Exception as e:
-    #     print(e)
-    #     deposit_data=server_state.deposit_data
-    # df2['Total Deposit Amount'] = df2["Proposal ID"].map(deposit_data)
-    # return st.dataframe(df2,use_container_width=True) 
+   
+    st.markdown("---")
+    st.text("")
 
+    st.markdown(f'[{title}]({sql})')
 
+    df[x] = pd.to_datetime(df[x])
+   
+
+    if not z:
+        alt_chart = alt.Chart(df)\
+        .mark_bar()\
+        .encode(
+        x=alt.X(x, type = "temporal", axis=alt.Axis(format="%b %d, %Y")),
+        y=y
+        ).properties(
+        width='container',
+        height=500,
+        ).interactive()
+    else:
+        alt_chart = alt.Chart(df)\
+        .mark_bar()\
+        .encode(
+        x=alt.X(x, type = "temporal", axis=alt.Axis(format="%b %d, %Y")),
+        y=y,
+        color=z,
+        ).properties(
+        width='container',
+        height=500,
+        ).interactive()
+
+    st.altair_chart(alt_chart, theme = 'streamlit', use_container_width=True)
 
 
 def df_creator(url):
@@ -79,6 +166,7 @@ def clear_text():
     st.session_state['text2'] = ""
     st.session_state['text3'] = ""
     st.session_state['text4'] = ""
+
 
 def table_votes(url, title=None,sql=None):
     if title and sql:
@@ -137,6 +225,8 @@ def table_votes(url, title=None,sql=None):
             st.write("")
             reset = st.button("🧹", on_click=clear_text)
 
+        df = df[['Proposal Status', 'Proposal ID', 'Proposal Title','veto (V) %', 'threshold (T) %', 'quorum (Q) %', 'Proposer', 'Grant Target Wallet', 'Proposal Link', 'Voting Start Time', 'Voting End Time' ]]
+
         if not make_choice and not prop_add and not prop_id and not pay_wal:
             return df
 
@@ -153,6 +243,7 @@ def table_votes(url, title=None,sql=None):
     # df2=df1.loc[df['Proposer']==prop_add]
 
     return df
+
 
 def terra_sdk_helper(req_url = None):
     if not req_url:
@@ -186,7 +277,7 @@ def terra_sdk_helper(req_url = None):
 
         return quorum_dict
 
-            
+        
 def table_proposals(url, title,sql):
 
     st.text("")
@@ -194,9 +285,9 @@ def table_proposals(url, title,sql):
     st.markdown(f'[{title}]({sql})')
 
     df=df_creator(url)
-    df["Proposal Creation Time"] = pd.to_datetime(df["Proposal Creation Time"])
+    df["Proposal Submission Time"] = pd.to_datetime(df["Proposal Submission Time"])
     df["Deposit End Time"] = pd.to_datetime(df["Deposit End Time"])
-    df=df.sort_values(by="Proposal Creation Time",ascending=False)
+    df=df.sort_values(by="Proposal Submission Time",ascending=False)
     df=df.reset_index(drop=True)
 
     col1, col2, col3,col4,col5 = st.columns([3,2,4,4,1])
@@ -281,12 +372,53 @@ if selected == "Proposals":
         st.metric("[# Deposit In-progress Proposals](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['# Deposit In-progress Proposals'], precision=2))
         st.metric("[Total Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Total Deposit Amount in LUNA'], precision=2))
         st.metric("[Outstanding Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Outstanding Deposit Amount in LUNA'], precision=2))
-        
-        
+    
+    colu1,colu3,colu2=st.columns([8,0.5,5.5])
+
+    with colu1:
+        bar_charts("https://api.flipsidecrypto.com/api/v2/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/data/latest",
+    "Weeks","Number of Submitted Proposals","Proposal Submissions Per Week", "https://flipsidecrypto.xyz/edit/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/visualizations/4163be18-61b6-4d6b-beff-1b0f930f7359")
+
+    with colu2:
+        donuts("https://api.flipsidecrypto.com/api/v2/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/data/latest",
+        "Voting Eligibility Status", "Number of Submitted Proposals", "Proposal Voting Eligibility Status Distribution", "https://flipsidecrypto.xyz/edit/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/visualizations/0071b128-9e66-4317-80a3-6c1b62309fe4")
+    
+    bar_charts("https://api.flipsidecrypto.com/api/v2/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/data/latest",
+    "Weeks","Total Deposit Amount in LUNA","Total Deposit Amount Per Week", "https://flipsidecrypto.xyz/edit/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/visualizations/f98b9faf-f8c8-4060-a9d3-fdb7aabe346c")
+
+
     table_proposals("https://api.flipsidecrypto.com/api/v2/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8/data/latest", 
-        "Grant Proposals Explorer","https://flipsidecrypto.xyz/edit/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8?fileSearch=peroid")
+        "Proposal Submissions Explorer","https://flipsidecrypto.xyz/edit/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8?fileSearch=peroid")
 
 if selected == "Votes and Grants":
+    other_stats = 'https://api.flipsidecrypto.com/api/v2/queries/97988d9b-a452-4517-aab9-d14ecbde6be2/data/latest'
+    votes_url= 'https://api.flipsidecrypto.com/api/v2/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6/data/latest'
+    votes_dict = votes_stats(votes_url, other_stats)
+    colum1, colum2, colum3, colum4, colum5=st.columns(5)
+
+    with colum1:
+        st.metric("[Total Approved Proposals (Voting Period)](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Total Approved Proposals (Voting Period)'], precision=2))
+        st.metric("[Total Rejected Proposals (Voting Period)](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Total Rejected Proposals (Voting Period)'], precision=2))
+
+    with colum2:
+        st.metric("[Total in-progress Proposals (Voting Period)](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Total in-progress Proposals (Voting Period)'], precision=2))
+        st.metric("[Total Votes Casted](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Total Votes Casted'], precision=2))
+
+    with colum3:
+        st.metric("[# of 'Yes' Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict[f"# of 'Yes' Votes"], precision=2))
+        st.metric("[# of 'No' Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict[f"# of 'No' Votes"], precision=2))
+
+    with colum4:
+        st.metric("[# of 'Abstain' Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict[f"# of 'Abstain' Votes"], precision=2))
+        st.metric("[# of 'NoWithVeto' Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict[f"# of 'NoWithVeto' Votes"], precision=2))
+    
+
+    with colum5:
+        st.metric("[# of Voters](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Voters Count'], precision=2))
+        st.metric("[Average Number of Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict["Average Number of Votes"], precision=2))
+
+
+
     dataf=table_votes(votes_tables_url, 
-        title="Grant Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
+        title="Proposal Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
     st.dataframe(dataf,use_container_width=True)

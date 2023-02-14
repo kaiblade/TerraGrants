@@ -19,10 +19,13 @@ from terra_sdk.client.lcd import LCDClient
 
 # nest_asyncio.apply()
 
+
+ 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
 terra = LCDClient(chain_id="phoenix-1", url="https://phoenix-lcd.terra.dev")
+
 votes_tables_url ="https://api.flipsidecrypto.com/api/v2/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7/data/latest"
 
 def status_dist():
@@ -102,8 +105,8 @@ def donuts( x,y,title,sql,datafr=None, url=None):
 
     fig.update_layout(
         autosize=True,
-        width=350,
-        height=350,
+        width=400,
+        height=400,
         showlegend=True, margin={"l":0,"r":5,"t":0,"b":0}
     )
 
@@ -112,6 +115,38 @@ def donuts( x,y,title,sql,datafr=None, url=None):
         textinfo='percent', textfont_size=14)
 
     st.plotly_chart(fig, theme=None, use_container_width=True)
+
+def line_charts(url, x, y, title,sql):
+    
+    st.text("")
+    st.text("")
+    
+    st.markdown(f'[{title}]({sql})')
+
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        response_json = response.json()
+    else:
+        response = None
+
+    df=pd.DataFrame.from_records(response_json)
+    df[x] = pd.to_datetime(df[x])
+    # url = 'https://app.flipsidecrypto.com/velocity/queries/f8cf2192-3efc-4584-b2c4-965937f721a6'
+    alt_chart = alt.Chart(df)\
+    .mark_line()\
+    .encode(
+    x=alt.X(x, type = "temporal", axis=alt.Axis(format="%b %d, %Y")),
+    y=y
+
+    ).properties(
+    width='container',
+    height=400,
+    ).interactive()
+
+    alt_chart.configure_bar(href='https://app.flipsidecrypto.com/velocity/queries/f8cf2192-3efc-4584-b2c4-965937f721a6')
+
+    st.altair_chart(alt_chart, theme = 'streamlit', use_container_width=True)
 
 def bar_charts(url, x, y,title,sql,z=None):
     
@@ -142,7 +177,7 @@ def bar_charts(url, x, y,title,sql,z=None):
         y=y
         ).properties(
         width='container',
-        height=500,
+        height=400,
         ).interactive()
     else:
         alt_chart = alt.Chart(df)\
@@ -399,6 +434,16 @@ if selected == "Proposals":
     bar_charts("https://api.flipsidecrypto.com/api/v2/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/data/latest",
     "Weeks","Total Deposit Amount in LUNA","Total Deposit Amount Per Week", "https://flipsidecrypto.xyz/edit/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/visualizations/f98b9faf-f8c8-4060-a9d3-fdb7aabe346c")
 
+    c1,c2=st.columns(2)
+    with c1:
+        line_charts("https://api.flipsidecrypto.com/api/v2/queries/23a7c6e6-15ad-480b-827c-095290ffd366/data/latest",
+    "Weeks", "Cumulative Proposal Submissions", "Weekly Cumulative Number of Proposal Submissions", "https://flipsidecrypto.xyz/edit/queries/23a7c6e6-15ad-480b-827c-095290ffd366/visualizations/17655c90-7f09-444d-b7e5-1484ae034cdd")
+
+    with c2:
+        line_charts("https://api.flipsidecrypto.com/api/v2/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487/data/latest",
+    "Weeks", "Cumulative Deposit Amount in LUNA", "Weekly Cumulative Deposit Amount in LUNA", "https://flipsidecrypto.xyz/edit/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487")
+
+    
 
     
 
@@ -445,6 +490,12 @@ if selected == "Votes and Grants":
         url="https://api.flipsidecrypto.com/api/v2/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9/data/latest")
         
 
+    # cl1,cl2=st.columns(2)
+    
     bar_charts("https://api.flipsidecrypto.com/api/v2/queries/c17a943b-9187-463d-973f-48c404ac4b32/data/latest",
     "Weeks","Number of Votes","Number of Votes Per Week Grouped by Vote Type", "https://flipsidecrypto.xyz/edit/queries/c17a943b-9187-463d-973f-48c404ac4b32?fileSearch=Number+of+Votes+Per+Week+Grouped+By+Vote+Type", z="Vote Type")
+    
+    line_charts("https://api.flipsidecrypto.com/api/v2/queries/0e852575-4097-440c-bf5c-1af04ff69137/data/latest",
+    "Weeks", "Cumulative Number of Votes", "Weekly Cumulative Number of Votes", "https://flipsidecrypto.xyz/edit/queries/0e852575-4097-440c-bf5c-1af04ff69137?fileSearch=weekly+")
+    
     

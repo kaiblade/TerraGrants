@@ -19,8 +19,8 @@ from terra_sdk.client.lcd import LCDClient
 
 # nest_asyncio.apply()
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+# loop = asyncio.new_event_loop()
+# asyncio.set_event_loop(loop)
 
 terra = LCDClient(chain_id="phoenix-1", url="https://phoenix-lcd.terra.dev")
 votes_tables_url ="https://api.flipsidecrypto.com/api/v2/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7/data/latest"

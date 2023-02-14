@@ -15,12 +15,23 @@ from PIL import Image
 from streamlit_server_state import server_state, server_state_lock
 from streamlit_extras.no_default_selectbox import selectbox
 from terra_sdk.client.lcd import LCDClient
+# import nest_asyncio
+
+# nest_asyncio.apply()
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
 terra = LCDClient(chain_id="phoenix-1", url="https://phoenix-lcd.terra.dev")
 votes_tables_url ="https://api.flipsidecrypto.com/api/v2/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7/data/latest"
+
+def status_dist():
+    df2=table_votes(votes_tables_url)
+    df3=df2[['Proposal ID', 'Proposal Status']]
+    # df4 = df3.groupby('Proposal Status').count()
+    df4=df3.groupby('Proposal Status').agg (prop_count= ('Proposal ID', 'count'))
+    df4=df4.reset_index()
+    return df4
 
 def votes_stats(url1, url2):
     df1=df_creator(url1)
@@ -62,21 +73,26 @@ def deposits_stats(url1,url2):
         stats_dict[col]=df3[col].iat[0]
     
     return stats_dict
-def donuts(url,x,y,title,sql):
+def donuts( x,y,title,sql,datafr=None, url=None):
 
     st.markdown("---")
     st.text("")
 
-    st.markdown(f'[{title}]({sql})')
+    if url:
+        st.markdown(f'[{title}]({sql})')
 
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        response_json = response.json()
-    else:
-        response = None
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            response_json = response.json()
+        else:
+            response = None
 
-    df=pd.DataFrame.from_records(response_json)
+        df=pd.DataFrame.from_records(response_json)
+
+    elif not datafr.empty:
+        st.markdown(f'[{title}]({sql})')
+        df= datafr
     df[x]=df[x].apply(lambda col: f'{col[0:18]}...' if len(col) > 21 else col)
 
   
@@ -86,8 +102,8 @@ def donuts(url,x,y,title,sql):
 
     fig.update_layout(
         autosize=True,
-        width=550,
-        height=550,
+        width=350,
+        height=350,
         showlegend=True, margin={"l":0,"r":5,"t":0,"b":0}
     )
 
@@ -108,12 +124,6 @@ def bar_charts(url, x, y,title,sql,z=None):
 
     df=pd.DataFrame.from_records(response_json)
     
-
-    if 'Rewards' in title:
-        print(luna_info()[2])
-        df[y] = df[y]*float(luna_info()[2])
-        if 'Total' in title:
-            return df[y].sum()
     
    
     st.markdown("---")
@@ -373,6 +383,8 @@ if selected == "Proposals":
         st.metric("[Total Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Total Deposit Amount in LUNA'], precision=2))
         st.metric("[Outstanding Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Outstanding Deposit Amount in LUNA'], precision=2))
     
+    table_proposals("https://api.flipsidecrypto.com/api/v2/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8/data/latest", 
+        "Proposal Submissions Explorer","https://flipsidecrypto.xyz/edit/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8?fileSearch=peroid")
     colu1,colu3,colu2=st.columns([8,0.5,5.5])
 
     with colu1:
@@ -380,15 +392,15 @@ if selected == "Proposals":
     "Weeks","Number of Submitted Proposals","Proposal Submissions Per Week", "https://flipsidecrypto.xyz/edit/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/visualizations/4163be18-61b6-4d6b-beff-1b0f930f7359")
 
     with colu2:
-        donuts("https://api.flipsidecrypto.com/api/v2/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/data/latest",
-        "Voting Eligibility Status", "Number of Submitted Proposals", "Proposal Voting Eligibility Status Distribution", "https://flipsidecrypto.xyz/edit/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/visualizations/0071b128-9e66-4317-80a3-6c1b62309fe4")
+        donuts(
+        "Voting Eligibility Status", "Number of Submitted Proposals", "Proposal Voting Eligibility Status Distribution", "https://flipsidecrypto.xyz/edit/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/visualizations/0071b128-9e66-4317-80a3-6c1b62309fe4",
+        url="https://api.flipsidecrypto.com/api/v2/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/data/latest")
     
     bar_charts("https://api.flipsidecrypto.com/api/v2/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/data/latest",
     "Weeks","Total Deposit Amount in LUNA","Total Deposit Amount Per Week", "https://flipsidecrypto.xyz/edit/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/visualizations/f98b9faf-f8c8-4060-a9d3-fdb7aabe346c")
 
 
-    table_proposals("https://api.flipsidecrypto.com/api/v2/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8/data/latest", 
-        "Proposal Submissions Explorer","https://flipsidecrypto.xyz/edit/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8?fileSearch=peroid")
+    
 
 if selected == "Votes and Grants":
     other_stats = 'https://api.flipsidecrypto.com/api/v2/queries/97988d9b-a452-4517-aab9-d14ecbde6be2/data/latest'
@@ -415,10 +427,24 @@ if selected == "Votes and Grants":
 
     with colum5:
         st.metric("[# of Voters](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict['Voters Count'], precision=2))
-        st.metric("[Average Number of Votes](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict["Average Number of Votes"], precision=2))
-
+        st.metric("[Average Number of Votes/Proposal](https://flipsidecrypto.xyz/edit/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6?fileSearch=+Grant+Votes)", millify(votes_dict["Average Number of Votes"], precision=2))
 
 
     dataf=table_votes(votes_tables_url, 
         title="Proposal Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
     st.dataframe(dataf,use_container_width=True)
+    co1,co2 = st.columns(2)
+    
+    with co1:
+        donuts(
+            "Proposal Status", "prop_count", "Proposal Status Distribution", votes_url,
+            datafr=status_dist())
+    with co2:
+        donuts(
+        "Vote Type", "Total Votes", "Vote Type Distribution", "https://flipsidecrypto.xyz/edit/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9?fileSearch=votes+category",
+        url="https://api.flipsidecrypto.com/api/v2/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9/data/latest")
+        
+
+    bar_charts("https://api.flipsidecrypto.com/api/v2/queries/c17a943b-9187-463d-973f-48c404ac4b32/data/latest",
+    "Weeks","Number of Votes","Number of Votes Per Week Grouped by Vote Type", "https://flipsidecrypto.xyz/edit/queries/c17a943b-9187-463d-973f-48c404ac4b32?fileSearch=Number+of+Votes+Per+Week+Grouped+By+Vote+Type", z="Vote Type")
+    

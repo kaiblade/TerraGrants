@@ -15,26 +15,83 @@ from PIL import Image
 from streamlit_server_state import server_state, server_state_lock
 from streamlit_extras.no_default_selectbox import selectbox
 from terra_sdk.client.lcd import LCDClient
-# import nest_asyncio
+from terra_sdk.client.lcd import AsyncLCDClient
+import aiohttp
 
-# nest_asyncio.apply()
-
-
- 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
+
+async def id_pro(id,loop):
+    async with aiohttp.ClientSession(loop=loop) as client:
+        asyncio.set_event_loop(loop)
+        terra1 = AsyncLCDClient("https://phoenix-lcd.terra.dev", "phoenix-1")
+        tally_id = await terra1.gov.tally(id)
+        return tally_id
+    
+# loop = asyncio.new_event_loop()
+# asyncio.set_event_loop(loop)
 
 terra = LCDClient(chain_id="phoenix-1", url="https://phoenix-lcd.terra.dev")
 
 votes_tables_url ="https://api.flipsidecrypto.com/api/v2/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7/data/latest"
 
+
 def status_dist():
     df2=table_votes(votes_tables_url)
     df3=df2[['Proposal ID', 'Proposal Status']]
-    # df4 = df3.groupby('Proposal Status').count()
-    df4=df3.groupby('Proposal Status').agg (prop_count= ('Proposal ID', 'count'))
+    df4=df3.groupby('Proposal Status').agg(prop_count= ('Proposal ID', 'count'))
     df4=df4.reset_index()
     return df4
+
+def grant_line_helper(url):
+    df1=df_creator(url)
+    df2=table_votes(votes_tables_url)
+    df_inner =pd.merge(df1, df2, on='Proposal ID', how='inner')
+    df_inner=df_inner.loc[df_inner['Proposal Status'] == 'Approved']
+    df_raw=df_inner[["Voting End Time", "Grant Amount"]]
+    df_raw["Weeks"] = df_raw["Voting End Time"].dt.to_period("W").dt.to_timestamp()
+    df_raw.drop('Voting End Time', inplace=True, axis=1)
+    df=df_raw.groupby('Weeks').agg(prop_count= ('Grant Amount', 'sum')).reset_index()
+    df.rename(columns = {'prop_count':'Total Grant Disbursed in LUNA'}, inplace = True)
+    df['Total Grant Disbursed in LUNA'] = df['Total Grant Disbursed in LUNA'].cumsum()
+    df.rename(columns = {'Total Grant Disbursed in LUNA':'Cumulative Grant Disbursed in LUNA'}, inplace = True)
+    
+    return df
+
+def grant_bar_helper(url):
+    df1=df_creator(url)
+    df2=table_votes(votes_tables_url)
+    df_inner =pd.merge(df1, df2, on='Proposal ID', how='inner')
+    df_inner=df_inner.loc[df_inner['Proposal Status'] == 'Approved']
+    df_raw=df_inner[["Voting End Time", "Grant Amount"]]
+    df_raw["Weeks"] = df_raw["Voting End Time"].dt.to_period("W").dt.to_timestamp()
+    df_raw.drop('Voting End Time', inplace=True, axis=1)
+    df=df_raw.groupby('Weeks').agg(prop_count= ('Grant Amount', 'sum')).reset_index()
+    df.rename(columns = {'prop_count':'Total Grant Disbursed in LUNA'}, inplace = True)
+    return df
+
+
+def grant_stats(url1,url2):
+    df1=df_creator(url1)
+    df2=df_creator(url2)
+    df3=table_votes(votes_tables_url)
+    df_inner =pd.merge(df2, df3, on='Proposal ID', how='inner')
+
+    grant_dict = dict()
+
+    grant_dict['Total Paid Grant in LUNA']= df_inner.loc[df_inner['Proposal Status'] == 'Approved', 'Grant Amount'].sum()
+    grant_dict['Total Paid Recipient Wallets']= df_inner.loc[df_inner['Proposal Status'] == 'Approved', 'Grant Target Wallet'].nunique()
+    grant_dict['% Paid Grant']= (grant_dict['Total Paid Grant in LUNA']*100)/df1['Total Requested Grant in LUNA'].iat[0]
+    grant_dict['% Paid Recipient Wallets']= (grant_dict['Total Paid Recipient Wallets']*100)/df1['Total Submitted Recipient Wallets'].iat[0]
+
+
+    list_cols=list(df1.columns)
+
+    for col in list_cols:
+        grant_dict[col]=df1[col].iat[0]
+
+    return grant_dict
+   
 
 def votes_stats(url1, url2):
     df1=df_creator(url1)
@@ -116,21 +173,25 @@ def donuts( x,y,title,sql,datafr=None, url=None):
 
     st.plotly_chart(fig, theme=None, use_container_width=True)
 
-def line_charts(url, x, y, title,sql):
+def line_charts(x, y,title,sql,url=None, datafr=None):
     
-    st.text("")
+    st.markdown("---")
     st.text("")
     
     st.markdown(f'[{title}]({sql})')
 
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        response_json = response.json()
-    else:
-        response = None
+    if url:
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            response_json = response.json()
+        else:
+            response = None
 
-    df=pd.DataFrame.from_records(response_json)
+        df=pd.DataFrame.from_records(response_json)
+
+    elif not datafr.empty:
+        df=datafr
     df[x] = pd.to_datetime(df[x])
     # url = 'https://app.flipsidecrypto.com/velocity/queries/f8cf2192-3efc-4584-b2c4-965937f721a6'
     alt_chart = alt.Chart(df)\
@@ -144,23 +205,26 @@ def line_charts(url, x, y, title,sql):
     height=400,
     ).interactive()
 
-    alt_chart.configure_bar(href='https://app.flipsidecrypto.com/velocity/queries/f8cf2192-3efc-4584-b2c4-965937f721a6')
+    # alt_chart.configure_bar(href='https://app.flipsidecrypto.com/velocity/queries/f8cf2192-3efc-4584-b2c4-965937f721a6')
 
     st.altair_chart(alt_chart, theme = 'streamlit', use_container_width=True)
 
-def bar_charts(url, x, y,title,sql,z=None):
+def bar_charts(x, y,title,sql,z=None, url=None, datafr=None):
     
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        response_json = response.json()
-    else:
-        response = None
+    if url:
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            response_json = response.json()
+        else:
+            response = None
 
-    df=pd.DataFrame.from_records(response_json)
+        df=pd.DataFrame.from_records(response_json)
+
+    elif not datafr.empty:
+        df=datafr
+
     
-    
-   
     st.markdown("---")
     st.text("")
 
@@ -188,7 +252,7 @@ def bar_charts(url, x, y,title,sql,z=None):
         color=z,
         ).properties(
         width='container',
-        height=500,
+        height=400,
         ).interactive()
 
     st.altair_chart(alt_chart, theme = 'streamlit', use_container_width=True)
@@ -214,8 +278,12 @@ def clear_text():
 
 
 def table_votes(url, title=None,sql=None):
+    
+
     if title and sql:
+        st.markdown("---")
         st.text("")
+
         st.markdown(f'[{title}]({sql})')
 
     current_date=pd.to_datetime('today')
@@ -311,8 +379,8 @@ def terra_sdk_helper(req_url = None):
             bonded = str(terra.staking.pool().bonded_tokens)
             bonded_coins=int(bonded.replace('uluna', ''))
             for id in id_list:
-                raw_value=(int(terra.gov.tally(id)['yes'])+int(terra.gov.tally(id)['no'])+int(terra.gov.tally(id)['abstain'])+\
-                int(terra.gov.tally(id)['no_with_veto']))*100/(bonded_coins)
+                raw_value=(int(asyncio.run(id_pro(id))['yes'])+int(asyncio.run(id_pro(id))['no'])+int(asyncio.run(id_pro(id))['abstain'])+\
+                int(asyncio.run(id_pro(id))['no_with_veto']))*100/(bonded_coins)
                 quorum_dict[id]=float(millify(raw_value, precision=2))
             server_state.quorum_dict=quorum_dict
 
@@ -325,9 +393,12 @@ def terra_sdk_helper(req_url = None):
         
 def table_proposals(url, title,sql):
 
+    
+    st.markdown("---")
     st.text("")
-
     st.markdown(f'[{title}]({sql})')
+
+
 
     df=df_creator(url)
     df["Proposal Submission Time"] = pd.to_datetime(df["Proposal Submission Time"])
@@ -387,7 +458,7 @@ st.markdown("- Dashboard Github link: https://github.com/kaiblade/TerraGrants")
 st.text("")
 selected = option_menu(
         menu_title=None,  
-        options=["Overview", "Proposals", "Votes and Grants", "Funds Disbursements"],  
+        options=["Overview", "Proposals & Deposits", "Votes", "Grant Disbursements"],  
         icons=["file-earmark-text-fill", "card-text", "card-checklist", "cash-coin"],  
         menu_icon="cast",  
         default_index=0, 
@@ -400,10 +471,12 @@ selected = option_menu(
 # if selected == "Overview":
     
 
-if selected == "Proposals":
+if selected == "Proposals & Deposits":
     stats_url='https://api.flipsidecrypto.com/api/v2/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc/data/latest'
     deposit_amount_url = 'https://api.flipsidecrypto.com/api/v2/queries/6baf2b29-eb26-4b9e-bf13-aa2024675fef/data/latest'
     dict_data = deposits_stats(stats_url, deposit_amount_url )
+
+    st.text("")
     col1, col2, col3=st.columns(3)
     with col1:
         st.metric("[Total Proposers (Deposit Period)](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Total Proposers (Deposit Period)'], precision=2))
@@ -423,34 +496,29 @@ if selected == "Proposals":
     colu1,colu3,colu2=st.columns([8,0.5,5.5])
 
     with colu1:
-        bar_charts("https://api.flipsidecrypto.com/api/v2/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/data/latest",
-    "Weeks","Number of Submitted Proposals","Proposal Submissions Per Week", "https://flipsidecrypto.xyz/edit/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/visualizations/4163be18-61b6-4d6b-beff-1b0f930f7359")
+        bar_charts("Weeks","Number of Submitted Proposals","Proposal Submissions Per Week", "https://flipsidecrypto.xyz/edit/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/visualizations/4163be18-61b6-4d6b-beff-1b0f930f7359", url="https://api.flipsidecrypto.com/api/v2/queries/e93bd2dc-1dbe-414d-bae9-68a024ef8eb9/data/latest")
 
     with colu2:
         donuts(
         "Voting Eligibility Status", "Number of Submitted Proposals", "Proposal Voting Eligibility Status Distribution", "https://flipsidecrypto.xyz/edit/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/visualizations/0071b128-9e66-4317-80a3-6c1b62309fe4",
         url="https://api.flipsidecrypto.com/api/v2/queries/496ee332-70cf-4fa7-9a67-aa7f979c029c/data/latest")
     
-    bar_charts("https://api.flipsidecrypto.com/api/v2/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/data/latest",
-    "Weeks","Total Deposit Amount in LUNA","Total Deposit Amount Per Week", "https://flipsidecrypto.xyz/edit/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/visualizations/f98b9faf-f8c8-4060-a9d3-fdb7aabe346c")
+    bar_charts("Weeks","Total Deposit Amount in LUNA","Total Deposit Amount Per Week", "https://flipsidecrypto.xyz/edit/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/visualizations/f98b9faf-f8c8-4060-a9d3-fdb7aabe346c",url="https://api.flipsidecrypto.com/api/v2/queries/3e2f787f-e56c-4cb0-8d64-060821e62072/data/latest")
 
     c1,c2=st.columns(2)
     with c1:
-        line_charts("https://api.flipsidecrypto.com/api/v2/queries/23a7c6e6-15ad-480b-827c-095290ffd366/data/latest",
-    "Weeks", "Cumulative Proposal Submissions", "Weekly Cumulative Number of Proposal Submissions", "https://flipsidecrypto.xyz/edit/queries/23a7c6e6-15ad-480b-827c-095290ffd366/visualizations/17655c90-7f09-444d-b7e5-1484ae034cdd")
+        line_charts("Weeks", "Cumulative Proposal Submissions", "Weekly Cumulative Number of Proposal Submissions", "https://flipsidecrypto.xyz/edit/queries/23a7c6e6-15ad-480b-827c-095290ffd366/visualizations/17655c90-7f09-444d-b7e5-1484ae034cdd", url="https://api.flipsidecrypto.com/api/v2/queries/23a7c6e6-15ad-480b-827c-095290ffd366/data/latest")
 
     with c2:
-        line_charts("https://api.flipsidecrypto.com/api/v2/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487/data/latest",
-    "Weeks", "Cumulative Deposit Amount in LUNA", "Weekly Cumulative Deposit Amount in LUNA", "https://flipsidecrypto.xyz/edit/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487")
+        line_charts("Weeks", "Cumulative Deposit Amount in LUNA", "Weekly Cumulative Deposit Amount in LUNA", "https://flipsidecrypto.xyz/edit/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487", url="https://api.flipsidecrypto.com/api/v2/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487/data/latest")
 
     
-
-    
-
-if selected == "Votes and Grants":
+if selected == "Votes":
     other_stats = 'https://api.flipsidecrypto.com/api/v2/queries/97988d9b-a452-4517-aab9-d14ecbde6be2/data/latest'
     votes_url= 'https://api.flipsidecrypto.com/api/v2/queries/bb06a6a7-178f-4f36-b059-5f06a2f645f6/data/latest'
     votes_dict = votes_stats(votes_url, other_stats)
+
+    st.text("")
     colum1, colum2, colum3, colum4, colum5=st.columns(5)
 
     with colum1:
@@ -478,6 +546,7 @@ if selected == "Votes and Grants":
     dataf=table_votes(votes_tables_url, 
         title="Proposal Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
     st.dataframe(dataf,use_container_width=True)
+    st.text("")
     co1,co2 = st.columns(2)
     
     with co1:
@@ -489,13 +558,33 @@ if selected == "Votes and Grants":
         "Vote Type", "Total Votes", "Vote Type Distribution", "https://flipsidecrypto.xyz/edit/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9?fileSearch=votes+category",
         url="https://api.flipsidecrypto.com/api/v2/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9/data/latest")
         
+    
+    cl1,cl2=st.columns([6,4])
+    with cl1:
+        bar_charts(
+    "Weeks","Number of Votes","Number of Votes Per Week Grouped by Vote Type", "https://flipsidecrypto.xyz/edit/queries/c17a943b-9187-463d-973f-48c404ac4b32?fileSearch=Number+of+Votes+Per+Week+Grouped+By+Vote+Type", z="Vote Type", url="https://api.flipsidecrypto.com/api/v2/queries/c17a943b-9187-463d-973f-48c404ac4b32/data/latest",)
+    with cl2:
+        line_charts("Weeks", "Cumulative Number of Votes", "Weekly Cumulative Number of Votes", "https://flipsidecrypto.xyz/edit/queries/0e852575-4097-440c-bf5c-1af04ff69137?fileSearch=weekly+", url="https://api.flipsidecrypto.com/api/v2/queries/0e852575-4097-440c-bf5c-1af04ff69137/data/latest")
 
-    # cl1,cl2=st.columns(2)
+
+if selected == "Grant Disbursements":
+    grant_dict=grant_stats( 'https://api.flipsidecrypto.com/api/v2/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb/data/latest', 'https://api.flipsidecrypto.com/api/v2/queries/3ec68f54-5889-4e27-b24a-55e2ba230724/data/latest')
     
-    bar_charts("https://api.flipsidecrypto.com/api/v2/queries/c17a943b-9187-463d-973f-48c404ac4b32/data/latest",
-    "Weeks","Number of Votes","Number of Votes Per Week Grouped by Vote Type", "https://flipsidecrypto.xyz/edit/queries/c17a943b-9187-463d-973f-48c404ac4b32?fileSearch=Number+of+Votes+Per+Week+Grouped+By+Vote+Type", z="Vote Type")
-    
-    line_charts("https://api.flipsidecrypto.com/api/v2/queries/0e852575-4097-440c-bf5c-1af04ff69137/data/latest",
-    "Weeks", "Cumulative Number of Votes", "Weekly Cumulative Number of Votes", "https://flipsidecrypto.xyz/edit/queries/0e852575-4097-440c-bf5c-1af04ff69137?fileSearch=weekly+")
-    
-    
+    column1, column2, column3 = st.columns(3)
+    with column1:
+        st.metric("[Total Requested Grants in Luna](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", millify(grant_dict['Total Requested Grant in LUNA'], precision=2))
+        st.metric("[Total Submitted Recipient Wallets](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", millify(grant_dict['Total Submitted Recipient Wallets'], precision=2))
+
+    with column2:
+        st.metric("[Total Paid Grant in LUNA](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", millify(grant_dict['Total Paid Grant in LUNA'], precision=2))
+        st.metric("[Total Paid Recipient Wallets](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", millify(grant_dict['Total Paid Recipient Wallets'], precision=2))
+
+    with column3:
+        st.metric("[% Paid Grant](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", f'{millify(grant_dict[f"% Paid Grant"], precision=2)} %')
+        st.metric("[% Paid Recipient Wallets](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", f'{millify(grant_dict["% Paid Recipient Wallets"], precision=2)} %')
+
+    df=grant_bar_helper('https://api.flipsidecrypto.com/api/v2/queries/3ec68f54-5889-4e27-b24a-55e2ba230724/data/latest')
+    bar_charts("Weeks", "Total Grant Disbursed in LUNA", "Weekly Total Grant Disbursed in LUNA","https://flipsidecrypto.xyz/edit/queries/3ec68f54-5889-4e27-b24a-55e2ba230724?fileSearch=Proposal", datafr=df)
+
+    df=grant_line_helper('https://api.flipsidecrypto.com/api/v2/queries/3ec68f54-5889-4e27-b24a-55e2ba230724/data/latest')
+    line_charts("Weeks", "Cumulative Grant Disbursed in LUNA", "Weekly Cumulative Total Grant Disbursed in LUNA","https://flipsidecrypto.xyz/edit/queries/3ec68f54-5889-4e27-b24a-55e2ba230724?fileSearch=Proposal", datafr=df)

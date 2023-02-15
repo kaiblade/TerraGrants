@@ -11,4 +11,4 @@ streamlit_extras==0.2.6
 streamlit_option_menu==0.3.2
 streamlit_server_state==0.15.2
 terra_sdk==3.0.1
-streamlit==1.16.0
+~treamlit==1.16.0

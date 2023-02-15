@@ -16,17 +16,15 @@ from streamlit_server_state import server_state, server_state_lock
 from streamlit_extras.no_default_selectbox import selectbox
 from terra_sdk.client.lcd import LCDClient
 from terra_sdk.client.lcd import AsyncLCDClient
-import aiohttp
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-async def id_pro(id,loop):
-    async with aiohttp.ClientSession(loop=loop) as client:
-        asyncio.set_event_loop(loop)
-        terra1 = AsyncLCDClient("https://phoenix-lcd.terra.dev", "phoenix-1")
-        tally_id = await terra1.gov.tally(id)
-        return tally_id
+# async def id_pro(id):
+#         terra1 = AsyncLCDClient("https://phoenix-lcd.terra.dev", "phoenix-1")
+#         tally_id = await terra1.gov.tally(id)
+#         terra1.session.close()
+#         return tally_id
     
 # loop = asyncio.new_event_loop()
 # asyncio.set_event_loop(loop)
@@ -379,8 +377,8 @@ def terra_sdk_helper(req_url = None):
             bonded = str(terra.staking.pool().bonded_tokens)
             bonded_coins=int(bonded.replace('uluna', ''))
             for id in id_list:
-                raw_value=(int(asyncio.run(id_pro(id))['yes'])+int(asyncio.run(id_pro(id))['no'])+int(asyncio.run(id_pro(id))['abstain'])+\
-                int(asyncio.run(id_pro(id))['no_with_veto']))*100/(bonded_coins)
+                raw_value=(int(terra.gov.tally(id)['yes'])+int(terra.gov.tally(id)['no'])+int(terra.gov.tally(id)['abstain'])+\
+                int(terra.gov.tally(id)['no_with_veto']))*100/(bonded_coins)
                 quorum_dict[id]=float(millify(raw_value, precision=2))
             server_state.quorum_dict=quorum_dict
 

@@ -496,7 +496,7 @@ if selected == "Proposals & Deposits":
         st.metric("[# Deposit In-progress Proposals](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['# Deposit In-progress Proposals'], precision=2))
         st.metric("[Total Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Total Deposit Amount in LUNA'], precision=2))
         st.metric("[Outstanding Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Outstanding Deposit Amount in LUNA'], precision=2))
-  
+    st.text("")
     with open('metrics1.md', 'r', encoding='utf-8-sig') as f:
         st.markdown(f.read())
 
@@ -563,7 +563,8 @@ if selected == "Votes":
     dataf=table_votes(votes_tables_url, 
         title="Proposal Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
     st.dataframe(dataf,use_container_width=True)
-   
+
+    st.text("")
     with open('table2.md', 'r', encoding='utf-8-sig') as f:
         st.markdown(f.read())
 
@@ -585,6 +586,7 @@ if selected == "Votes":
         st.markdown(f.read())
     
     cl1,cl2=st.columns([6,4])
+
     with cl1:
         bar_charts(
     "Weeks","Number of Votes","Number of Votes Per Week Grouped by Vote Type", "https://flipsidecrypto.xyz/edit/queries/c17a943b-9187-463d-973f-48c404ac4b32?fileSearch=Number+of+Votes+Per+Week+Grouped+By+Vote+Type", z="Vote Type", url="https://api.flipsidecrypto.com/api/v2/queries/c17a943b-9187-463d-973f-48c404ac4b32/data/latest",)
@@ -595,6 +597,7 @@ if selected == "Votes":
 if selected == "Grant Disbursements":
     grant_dict=grant_stats( 'https://api.flipsidecrypto.com/api/v2/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb/data/latest', 'https://api.flipsidecrypto.com/api/v2/queries/3ec68f54-5889-4e27-b24a-55e2ba230724/data/latest')
     
+    st.text("")
     column1, column2, column3 = st.columns(3)
     with column1:
         st.metric("[Total Requested Grants in Luna](https://flipsidecrypto.xyz/edit/queries/21487e38-ebe4-4df6-9cab-2faca09cb2cb?fileSearch=Grant+Stat)", millify(grant_dict['Total Requested Grant in LUNA'], precision=2))

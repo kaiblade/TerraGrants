@@ -581,7 +581,7 @@ if selected == "Votes":
         "Vote Type", "Total Votes", "Vote Type Distribution", "https://flipsidecrypto.xyz/edit/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9?fileSearch=votes+category",
         url="https://api.flipsidecrypto.com/api/v2/queries/ad762586-822c-48fb-960d-dfd9e4bfe0d9/data/latest")
         
-    with open('donuts2.md', 'r', encoding='utf-8-sig') as f:
+    with open('Donuts2.md', 'r', encoding='utf-8-sig') as f:
         st.markdown(f.read())
     
     cl1,cl2=st.columns([6,4])

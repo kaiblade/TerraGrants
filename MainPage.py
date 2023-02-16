@@ -19,7 +19,7 @@ from terra_sdk.client.lcd import AsyncLCDClient
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
-loop.run_forever()
+
 
 # async def id_pro(id):
 #         terra1 = AsyncLCDClient("https://phoenix-lcd.terra.dev", "phoenix-1")
@@ -566,7 +566,7 @@ if selected == "Votes":
    
     with open('table2.md', 'r', encoding='utf-8-sig') as f:
         st.markdown(f.read())
-        
+
     image_fetch('ProposalPassConditions.png','Grant Pass Conditions', 'https://docs.terra.money/develop/module-specifications/spec-governance/#voting-period')
 
     st.text("")

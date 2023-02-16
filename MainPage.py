@@ -19,6 +19,7 @@ from terra_sdk.client.lcd import AsyncLCDClient
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
+loop.run_forever()
 
 # async def id_pro(id):
 #         terra1 = AsyncLCDClient("https://phoenix-lcd.terra.dev", "phoenix-1")
@@ -397,7 +398,6 @@ def table_proposals(url, title,sql):
     st.markdown(f'[{title}]({sql})')
 
 
-
     df=df_creator(url)
     df["Proposal Submission Time"] = pd.to_datetime(df["Proposal Submission Time"])
     df["Deposit End Time"] = pd.to_datetime(df["Deposit End Time"])
@@ -441,6 +441,12 @@ def table_proposals(url, title,sql):
 
     st.dataframe(df,use_container_width=True)
 
+def image_fetch(image, caption,link):
+    st.text("")
+    st.markdown(f'[{caption}]({link})')
+    image = Image.open(image)
+
+    st.image(image, caption=caption,use_column_width='always')
 
 st.set_page_config(page_title=None, page_icon=None, layout="wide", initial_sidebar_state="auto", menu_items=None)
 with open('style.css') as f:
@@ -467,7 +473,9 @@ selected = option_menu(
 # print((terra.staking.pool().bonded_tokens))
 
 # if selected == "Overview":
-    
+if selected == "Overview":
+    with open('overview.md', 'r', encoding='utf-8-sig') as f:
+        st.markdown(f.read())
 
 if selected == "Proposals & Deposits":
     stats_url='https://api.flipsidecrypto.com/api/v2/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc/data/latest'
@@ -488,9 +496,17 @@ if selected == "Proposals & Deposits":
         st.metric("[# Deposit In-progress Proposals](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['# Deposit In-progress Proposals'], precision=2))
         st.metric("[Total Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Total Deposit Amount in LUNA'], precision=2))
         st.metric("[Outstanding Deposit Amount in LUNA](https://flipsidecrypto.xyz/edit/queries/b49ce1ca-f3df-4327-abe7-55da5bd74ecc)", millify(dict_data['Outstanding Deposit Amount in LUNA'], precision=2))
-    
+  
+    with open('metrics1.md', 'r', encoding='utf-8-sig') as f:
+        st.markdown(f.read())
+
     table_proposals("https://api.flipsidecrypto.com/api/v2/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8/data/latest", 
         "Proposal Submissions Explorer","https://flipsidecrypto.xyz/edit/queries/a3c67a3e-f33e-44e2-89d2-fac540bf1fd8?fileSearch=peroid")
+    
+    st.text(" ")
+    with open('table1.md', 'r', encoding='utf-8-sig') as f:
+        st.markdown(f.read())
+
     colu1,colu3,colu2=st.columns([8,0.5,5.5])
 
     with colu1:
@@ -510,6 +526,9 @@ if selected == "Proposals & Deposits":
     with c2:
         line_charts("Weeks", "Cumulative Deposit Amount in LUNA", "Weekly Cumulative Deposit Amount in LUNA", "https://flipsidecrypto.xyz/edit/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487", url="https://api.flipsidecrypto.com/api/v2/queries/0b30377e-a914-4a9b-9b6e-2c86c43cf487/data/latest")
 
+    st.text(" ")
+    with open('others.md', 'r', encoding='utf-8-sig') as f:
+        st.markdown(f.read())
     
 if selected == "Votes":
     other_stats = 'https://api.flipsidecrypto.com/api/v2/queries/97988d9b-a452-4517-aab9-d14ecbde6be2/data/latest'
@@ -544,6 +563,12 @@ if selected == "Votes":
     dataf=table_votes(votes_tables_url, 
         title="Proposal Voting Explorer",sql="https://flipsidecrypto.xyz/edit/queries/e255de62-be60-4a28-8a4d-66eaa3e668d7")
     st.dataframe(dataf,use_container_width=True)
+   
+    with open('table2.md', 'r', encoding='utf-8-sig') as f:
+        st.markdown(f.read())
+        
+    image_fetch('ProposalPassConditions.png','Grant Pass Conditions', 'https://docs.terra.money/develop/module-specifications/spec-governance/#voting-period')
+
     st.text("")
     co1,co2 = st.columns(2)
     

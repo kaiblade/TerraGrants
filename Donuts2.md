@@ -1,0 +1,2 @@
+- The "Proposal Status Distribution" Donut shows the respective share in the number of proposals each proposal status has.
+- The "Vote Type Distribution" Donut shows the respective share in the number of votes each vote type has.
